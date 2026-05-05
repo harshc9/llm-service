@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Service Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <header class="flex justify-between items-center mb-12">
+            <div>
+                <h1 class="text-4xl font-bold text-blue-400">LLM Service Dashboard</h1>
+                <p class="text-gray-400 mt-2">Real-time routing and pool management</p>
+            </div>
+            <button onclick="syncModels()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
+                Sync Models
+            </button>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 text-sm font-medium uppercase mb-2">Total Requests</h3>
+                <p id="totalRequests" class="text-3xl font-bold">0</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 text-sm font-medium uppercase mb-2">Total Tokens</h3>
+                <p id="totalTokens" class="text-3xl font-bold">0</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 text-sm font-medium uppercase mb-2">Error Rate</h3>
+                <p id="errorRate" class="text-3xl font-bold">0.00%</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <!-- Management Column -->
+            <div class="lg:col-span-1 space-y-8">
+                <!-- Create Project -->
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-4 text-blue-400">Add Project</h3>
+                    <div class="space-y-4">
+                        <input id="projName" type="text" placeholder="Project Name" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                        <button onclick="createProject()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium">Create Project</button>
+                    </div>
+                </div>
+
+                <!-- Add API Key -->
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-4 text-green-400">Add API Key</h3>
+                    <div class="space-y-4">
+                        <input id="keyProjId" type="text" placeholder="Project UUID" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                        <input id="keyAlias" type="text" placeholder="Key Alias (e.g. key-1)" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                        <input id="keySecret" type="password" placeholder="API Key (AIza...)" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                        <button onclick="addKey()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded font-medium">Add Key</button>
+                    </div>
+                </div>
+
+                <!-- Create Client -->
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-4 text-purple-400">Register Client</h3>
+                    <div class="space-y-4">
+                        <input id="clientName" type="text" placeholder="Client Name" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                        <button onclick="createClient()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded font-medium">Register</button>
+                        <div id="tokenDisplay" class="hidden p-3 bg-gray-900 border border-dashed border-purple-500 rounded break-all text-xs font-mono text-purple-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Column -->
+            <div class="lg:col-span-2 space-y-8">
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-6">Model Distribution</h3>
+                    <div class="h-64 flex items-center justify-center">
+                        <canvas id="modelChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 class="text-xl font-semibold mb-4">Quick Test (REST)</h3>
+                    <div class="space-y-4">
+                        <input id="testToken" type="text" placeholder="Bearer Token" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-xs">
+                        <textarea id="testPrompt" rows="2" placeholder="Ask something..." class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"></textarea>
+                        <button id="testBtn" onclick="testGenerate()" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded">Run Test</button>
+                        <pre id="testRes" class="bg-gray-900 p-3 rounded text-xs text-green-400 overflow-x-auto min-h-[50px]"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStats() {
+            try {
+                const res = await fetch('/v1/admin/stats');
+                const data = await res.json();
+                
+                if (data.summary) {
+                    document.getElementById('totalRequests').innerText = (data.summary.total_requests || 0).toLocaleString();
+                    document.getElementById('totalTokens').innerText = (data.summary.total_tokens || 0).toLocaleString();
+                    document.getElementById('errorRate').innerText = ((data.summary.error_rate || 0) * 100).toFixed(2) + '%';
+                }
+
+                if (data.model_usage && data.model_usage.length > 0) {
+                    updateChart(data.model_usage);
+                }
+            } catch (err) {
+                console.error('Failed to fetch stats:', err);
+            }
+        }
+
+        let chart;
+        function updateChart(usage) {
+            const ctx = document.getElementById('modelChart').getContext('2d');
+            const labels = usage.map(u => u.model_name.split('/').pop());
+            const values = usage.map(u => u.requests);
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        async function createProject() {
+            const name = document.getElementById('projName').value;
+            if (!name) return alert('Name required');
+            const res = await fetch('/v1/admin/projects', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, provider: 'google'})
+            });
+            const data = await res.json();
+            alert('Project Created! ID: ' + data.id);
+            document.getElementById('keyProjId').value = data.id;
+        }
+
+        async function addKey() {
+            const project_id = document.getElementById('keyProjId').value;
+            const alias = document.getElementById('keyAlias').value;
+            const api_key = document.getElementById('keySecret').value;
+            const res = await fetch('/v1/admin/keys', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({project_id, alias, api_key, priority: 1})
+            });
+            if (res.ok) alert('Key Added!');
+            else alert('Error adding key');
+        }
+
+        async function createClient() {
+            const name = document.getElementById('clientName').value;
+            const res = await fetch('/v1/admin/clients', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            const data = await res.json();
+            const disp = document.getElementById('tokenDisplay');
+            disp.innerText = 'Token: ' + data.api_token;
+            disp.classList.remove('hidden');
+            document.getElementById('testToken').value = data.api_token;
+        }
+
+        async function syncModels() {
+            const res = await fetch('/v1/admin/sync-models', {method: 'POST'});
+            if (res.ok) alert('Sync Complete!');
+            else alert('Sync Failed (Need at least one valid key)');
+        }
+
+        async function testGenerate() {
+            const token = document.getElementById('testToken').value;
+            const prompt = document.getElementById('testPrompt').value;
+            const btn = document.getElementById('testBtn');
+            const resArea = document.getElementById('testRes');
+            
+            if (!token || !prompt) return alert('Token and Prompt required');
+            
+            btn.disabled = true;
+            btn.innerText = 'Processing...';
+            resArea.innerText = 'Sending request...';
+
+            try {
+                const res = await fetch('/v1/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({prompt})
+                });
+                const data = await res.json();
+                resArea.innerText = JSON.stringify(data, null, 2);
+            } catch (err) {
+                resArea.innerText = 'Error: ' + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Run Test';
+            }
+        }
+
+        fetchStats();
+        setInterval(fetchStats, 5000);
+    </script>
+</body>
+</html>
