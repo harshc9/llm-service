@@ -1,0 +1,339 @@
+basePath: /
+definitions:
+  generation.EmbedResponse:
+    properties:
+      embedding:
+        items:
+          type: number
+        type: array
+      model:
+        type: string
+    type: object
+  generation.GenerateResponse:
+    properties:
+      input_tokens:
+        type: integer
+      model:
+        type: string
+      output_tokens:
+        type: integer
+      text:
+        type: string
+    type: object
+  http.CreateClientRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  http.CreateKeyRequest:
+    properties:
+      alias:
+        type: string
+      api_key:
+        type: string
+      priority:
+        type: integer
+      project_id:
+        type: string
+    required:
+    - alias
+    - api_key
+    - project_id
+    type: object
+  http.CreateProjectRequest:
+    properties:
+      name:
+        type: string
+      provider:
+        type: string
+    required:
+    - name
+    - provider
+    type: object
+  http.EmbedRequest:
+    properties:
+      model:
+        type: string
+      text:
+        type: string
+    required:
+    - text
+    type: object
+  http.GenerateRequest:
+    properties:
+      model:
+        type: string
+      prompt:
+        type: string
+    required:
+    - prompt
+    type: object
+  keypool.ApiKey:
+    properties:
+      alias:
+        type: string
+      cooldown_until:
+        type: string
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      fail_count:
+        type: integer
+      health_state:
+        description: healthy, degraded, cooldown, disabled
+        type: string
+      id:
+        type: string
+      last_used_at:
+        type: string
+      priority:
+        type: integer
+      project_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  keypool.ApiProject:
+    properties:
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: string
+      keys:
+        items:
+          $ref: '#/definitions/keypool.ApiKey'
+        type: array
+      name:
+        type: string
+      provider:
+        description: '"google"'
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: High-availability Gemini proxy with multi-project routing and failover.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Gemini LLM Service API
+  version: "1.0"
+paths:
+  /v1/admin/clients:
+    post:
+      consumes:
+      - application/json
+      description: Register a new multi-tenant client and generate a bearer token
+      parameters:
+      - description: Client details
+        in: body
+        name: client
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateClientRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a client
+      tags:
+      - admin
+  /v1/admin/keys:
+    post:
+      consumes:
+      - application/json
+      description: Encrypt and store a new Gemini API key for a project
+      parameters:
+      - description: Key details
+        in: body
+        name: key
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/keypool.ApiKey'
+      summary: Add an API key
+      tags:
+      - admin
+  /v1/admin/projects:
+    post:
+      consumes:
+      - application/json
+      description: Register a new Google Cloud project in the system
+      parameters:
+      - description: Project details
+        in: body
+        name: project
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/keypool.ApiProject'
+      summary: Create a new project
+      tags:
+      - admin
+  /v1/admin/stats:
+    get:
+      description: Retrieve aggregated usage statistics and model distribution
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get usage stats
+      tags:
+      - admin
+  /v1/admin/sync-models:
+    post:
+      description: Fetch and update available Gemini models from the provider
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Sync model catalog
+      tags:
+      - admin
+  /v1/embeddings:
+    post:
+      consumes:
+      - application/json
+      description: Execute a text embedding request
+      parameters:
+      - description: Embedding parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/http.EmbedRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/generation.EmbedResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate embeddings
+      tags:
+      - generation
+  /v1/generate:
+    post:
+      consumes:
+      - application/json
+      description: Execute a text completion request with automatic routing and failover
+      parameters:
+      - description: Generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/http.GenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/generation.GenerateResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate text
+      tags:
+      - generation
+  /v1/generate/grounded:
+    post:
+      consumes:
+      - application/json
+      description: Execute a text completion request with Google Search grounding
+      parameters:
+      - description: Generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/http.GenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/generation.GenerateResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate grounded text
+      tags:
+      - generation
+  /v1/generate/stream:
+    post:
+      consumes:
+      - application/json
+      description: Execute a streaming text completion request (SSE)
+      parameters:
+      - description: Generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/http.GenerateRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream of chunks
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Stream text generation
+      tags:
+      - generation
+  /v1/live:
+    get:
+      description: Establish a bidirectional multimodal session with Gemini Live
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Gemini Live WebSocket Proxy
+      tags:
+      - generation
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
