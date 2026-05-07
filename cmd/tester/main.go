@@ -66,7 +66,7 @@ func testGeneration(token string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 
 	// We expect a 200 if key is valid, or 500 if key is dummy, but 401/403/404 would be failures
